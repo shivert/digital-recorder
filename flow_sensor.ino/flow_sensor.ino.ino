@@ -2,6 +2,10 @@
 // Code adapted by Charles Gantt from PC Fan RPM code written by Crenn @thebestcasescenario.com
 // http:/themakersworkbench.com http://thebestcasescenario.com http://seeedstudio.com
 
+//#include <avr/io.h>
+//#include <avr/interrupt.h>
+
+
 volatile int NbTopsFan; //measuring the rising edges of the signal
 int Calc;                               
 int hallsensor = 2;    //The pin location of the sensor
@@ -14,9 +18,9 @@ void rpm ()     //This is the function that the interupt calls
 // The setup() method runs once, when the sketch starts
 void setup() //
 {
-  pinMode(hallsensor, INPUT); //initializes digital pin 2 as an input
+  pinMode(hallsensor, INPUT_PULLUP); //initializes digital pin 2 as an input
   Serial.begin(9600); //This is the setup function where the serial port is initialised,
-  attachInterrupt(0, rpm, RISING); //and the interrupt is attached
+  attachInterrupt(hallsensor, rpm, RISING); //and the interrupt is attached
 } 
 
 // the loop() method runs over and over again,
