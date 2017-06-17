@@ -35,10 +35,44 @@ uint16_t currtouched = 0;
 
 int lastCalc = 0;
 
+const int NOTE_MIDDLE_C = 1;
+const int NOTE_D = 2;
+const int NOTE_E = 3;
+const int NOTE_F = 4;
+const int NOTE_G = 5;
+const int NOTE_A = 6;
+const int NOTE_B = 7;
+const int NOTE_C = 8;
+const int NOTE_D_2 = 9;
+const int NOTE_B_FLAT = 10;
+
+byte noteButtons[] = {255, 254, 252, 248, 240, 224, 200, 160, 32, 216};
+int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70};
+const int numberOfNotes = 10;
+
 void rpm ()     //This is the function that the interupt calls
 {
   NbTopsFan++;  //This function measures the rising and falling edge of the hall effect sensors signal
 }
+
+void playNote (uint16_t reading)     //This is the function that the interupt calls
+{
+  //Get the botton 8 bits from the reading
+  uint8_t temp = (reading & 0xff);
+  Serial.println(reading);
+  Serial.println(temp);
+
+  for (uint8_t i = 0; i < numberOfNotes; i++) {
+    if (temp == noteButtons[i]) {
+      usbMIDI.sendNoteOn(noteMIDI[i], 99, channel);
+    }
+    else {
+      usbMIDI.sendNoteOff(noteMIDI[i], 99, channel);
+    }
+  }
+  //check to see if that exists in noteButtons
+}
+
 
 void setup() {
   Serial.begin(9600);
@@ -77,7 +111,7 @@ void loop() {
 
   sei();            //Enables interrupts
 
-  if (printState(calc,lastCalc)) {
+  if (printState(calc, lastCalc)) {
     if (calc > 0) {
       Serial.println("Blowing");
     }
@@ -85,25 +119,26 @@ void loop() {
       Serial.println(" Not Blowing");
     }
   }
-  
-  if (calc > 0) {
-    for (uint8_t i = 0; i < 12; i++) {
-      // it if *is* touched and *wasnt* touched before, alert!
-      if ((currtouched & _BV(i))) {
-        Serial.print(i); Serial.println(" touched");
-        usbMIDI.sendNoteOn(60 + i, 99, channel); // 60 = C4
-      }
-      if (!(currtouched & _BV(i)) && (lasttouched & _BV(i)) ) {
-        Serial.print(i); Serial.println(" released");
-        usbMIDI.sendNoteOff(60 + i, 0, channel);  // 60 = C4
-      }
 
-    }
+  if (calc > 0) {
+    playNote(currtouched);
+    //    for (uint8_t i = 0; i < 12; i++) {
+    //      // it if *is* touched and *wasnt* touched before, alert!
+    //      if ((currtouched & _BV(i))) {
+    //        Serial.print(i); Serial.println(" touched");
+    //        usbMIDI.sendNoteOn(60 + i, 99, channel); // 60 = C4
+    //      }
+    //      if (!(currtouched & _BV(i)) && (lasttouched & _BV(i)) ) {
+    //        Serial.print(i); Serial.println(" released");
+    //        usbMIDI.sendNoteOff(60 + i, 0, channel);  // 60 = C4
+    //      }
+    //
+    //    }
 
   }
   else {
-    for (uint8_t i = 0; i < 12; i++) {
-      usbMIDI.sendNoteOff(60 + i, 0, channel); // 60 = C4
+    for (uint8_t i = 0; i < numberOfNotes; i++) {
+      usbMIDI.sendNoteOff(noteMIDI[i], 0, channel);
     }
   }
 
