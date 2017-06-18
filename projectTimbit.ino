@@ -68,14 +68,14 @@ void loop()
 
   if (flow > 0)
   {
-    if (printState(flow, lastflow)) {
+    if (shouldPrint(flow, lastflow)) {
       Serial.println("Blowing");
     }
     playNote(currtouched);
   }
   else
   {
-    if (printState(flow, lastflow)) {
+    if (shouldPrint(flow, lastflow)) {
       Serial.println("Not Blowing");
     }
     turnOffAllNotes();
@@ -100,6 +100,11 @@ void loop()
 void calculateFlow()
 {
   flow = (NbTopsFan * 60 / 7.5); //(Pulse frequency x 60) / 7.5Q, = flow rate in L/hour
+}
+
+int changeInFlow()
+{
+  return abs(lastFlow - flow)
 }
 
 void playNote (uint16_t reading)
@@ -149,7 +154,7 @@ void mockFlowSensor()
 }
 
 
-bool printState(int num, int lastNum)
+bool shouldPrint(int num, int lastNum)
 {
   if (num != lastNum)
   {
