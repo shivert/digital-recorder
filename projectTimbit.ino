@@ -7,7 +7,7 @@ const int channel = 1;
 
 volatile int NbTopsFan; //measuring the rising edges of the signal
 int flow = 0;
-int lastflow = 0;
+int lastFlow = 0;
 int flowSensor = 2;    //The pin location of the sensor
 
 // You can have up to 4 on one i2c bus but one is enough for testing!
@@ -18,7 +18,7 @@ Adafruit_MPR121 cap = Adafruit_MPR121();
 uint16_t lasttouched = 0;
 uint16_t currtouched = 0;
 
-const int numberOfNotes = 10;
+const int numberOfNotes = 11;
 
 const int NOTE_MIDDLE_C = 1;
 const int NOTE_D = 2;
@@ -31,8 +31,8 @@ const int NOTE_C = 8;
 const int NOTE_D_2 = 9;
 const int NOTE_B_FLAT = 10;
 
-byte noteButtons[] = {255, 254, 252, 248, 240, 224, 200, 160, 32, 216};
-int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70};
+byte noteButtons[] = {255, 127, 63, 31, 15, 7, 3, 5, 4, 27}; //the last value is the default sensor value
+int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //the last value is the default recorder note
 
 void incrementCount ()     //This is the function that the interupt calls
 {
@@ -55,6 +55,9 @@ void setup()
     while (1);
   }
   Serial.println("MPR121 found!");
+
+  usbMIDI.sendProgramChange(75,1);
+  
 }
 
 void loop()
@@ -65,17 +68,17 @@ void loop()
   NbTopsFan = 0;
   //Enables interrupts
   sei();
-
+  
   if (flow > 0)
   {
-    if (shouldPrint(flow, lastflow)) {
+    if (shouldPrint(flow, lastFlow)) {
       Serial.println("Blowing");
     }
     playNote(currtouched);
   }
   else
   {
-    if (shouldPrint(flow, lastflow)) {
+    if (shouldPrint(flow, lastFlow)) {
       Serial.println("Not Blowing");
     }
     turnOffAllNotes();
@@ -83,19 +86,35 @@ void loop()
 
   //reset our state
   lasttouched = currtouched;
-  lastflow = flow;
+  lastFlow = flow;
 
   // put a delay so it isn't overwhelming ??? I don't know if this is needed?
   delay(100);
   //Disable interrupts
   cli();
 
-  //calculateFlow();
-  mockFlowSensor();
+  calculateFlow();
+  //mockFlowSensor();
+  extraDebugInfoForCapSensor();
 }
 
 
 // Functions
+
+void extraDebugInfoForCapSensor() {
+   // debugging info, what
+  Serial.print("\t\t\t\t\t\t\t\t\t\t\t\t\t 0x"); Serial.println(cap.touched(), HEX);
+  Serial.print("Filt: ");
+  for (uint8_t i=0; i<12; i++) {
+    Serial.print(cap.filteredData(i)); Serial.print("\t");
+  }
+  Serial.println();
+  Serial.print("Base: ");
+  for (uint8_t i=0; i<12; i++) {
+    Serial.print(cap.baselineData(i)); Serial.print("\t");
+  }
+  Serial.println();
+}
 
 void calculateFlow()
 {
@@ -104,7 +123,7 @@ void calculateFlow()
 
 int changeInFlow()
 {
-  return abs(lastFlow - flow)
+  return abs(lastFlow - flow);
 }
 
 void playNote (uint16_t reading)
@@ -125,7 +144,7 @@ void playNote (uint16_t reading)
       usbMIDI.sendNoteOff(noteMIDI[i], 99, channel);
     }
   }
-  //check to see if that exists in noteButtons
+  
 }
 
 void turnOffAllNotes()
