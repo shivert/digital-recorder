@@ -32,7 +32,7 @@ const int NOTE_D_2 = 9;
 const int NOTE_B_FLAT = 10;
 
 byte noteButtons[] = {255, 127, 63, 31, 15, 7, 3, 5, 4, 27}; 
-bool noteButtonToggle[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+bool noteButtonToggle[] = {false, false, false, false, false, false, false, false, false, false};
 int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //the last value is the default recorder note
 
 void incrementCount ()     //This is the function that the interupt calls
@@ -96,7 +96,7 @@ void loop()
 
   calculateFlow();
   //mockFlowSensor();
-  extraDebugInfoForCapSensor();
+  //extraDebugInfoForCapSensor();
 }
 
 
@@ -141,10 +141,10 @@ void playNote (uint16_t reading)
       usbMIDI.sendNoteOn(noteMIDI[i], 99, channel);
       noteButtonToggle[i] = true;
     }
-    else
+    else if (temp != noteButtons[i])
     {
       usbMIDI.sendNoteOff(noteMIDI[i], 99, channel);
-      noteButtonToggle[i] == false
+      noteButtonToggle[i] = false;
     }
   }
   
@@ -155,6 +155,7 @@ void turnOffAllNotes()
   for (uint8_t i = 0; i < numberOfNotes; i++)
   {
     usbMIDI.sendNoteOff(noteMIDI[i], 0, channel);
+    noteButtonToggle[i] = false; 
   }
 }
 
