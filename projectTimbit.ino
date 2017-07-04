@@ -1,6 +1,5 @@
-
+#include <Adafruit_MPR121.h>
 #include <Wire.h>
-#include "Adafruit_MPR121.h"
 
 // the MIDI channel number to send messages
 const int channel = 1;
@@ -8,7 +7,10 @@ const int channel = 1;
 volatile int NbTopsFan; //measuring the rising edges of the signal
 int flow = 0;
 int lastFlow = 0;
-int flowSensor = 2;    //The pin location of the sensor
+const int flowSensor = 2;    //The pin location of the sensor
+const int buttonPin = 6;     //The pin location of joystick button
+const int PIN_ANALOG_X = 23;
+const int PIN_ANALOG_Y = 22;
 
 // You can have up to 4 on one i2c bus but one is enough for testing!
 Adafruit_MPR121 cap = Adafruit_MPR121();
@@ -31,9 +33,18 @@ const int NOTE_C = 8;
 const int NOTE_D_2 = 9;
 const int NOTE_B_FLAT = 10;
 
-byte noteButtons[] = {255, 127, 63, 31, 15, 7, 3, 5, 4, 27}; 
-bool noteButtonToggle[] = {false, false, false, false, false, false, false, false, false, false};
-int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //the last value is the default recorder note
+const byte noteButtons[] = {255, 127, 63, 31, 15, 7, 3, 5, 4, 27};
+const bool noteButtonToggle[] = {false, false, false, false, false, false, false, false, false, false};
+const int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //the last value is the default recorder note
+const int octaves[] = {-2, -1, 0, 1, 2};
+
+int notesEnabled[] = {};
+
+int joystick_joystick_x_position, joystick_joystick_y_position, joystick_buttonState;
+int lastButtonPosition = 0;
+int currButtonPosition = 0;
+int currOctave = 2;
+const char* const directionMapping[] = {"normal", "down", "up", "left", "right"};
 
 void incrementCount ()     //This is the function that the interupt calls
 {
@@ -44,6 +55,7 @@ void setup()
 {
   Serial.begin(9600);
   pinMode(flowSensor, INPUT_PULLUP);
+  pinMode(buttonPin, INPUT_PULLUP);
   attachInterrupt(flowSensor, incrementCount, RISING);
 
   Serial.println("Group 5 LFP Test");
@@ -57,19 +69,75 @@ void setup()
   }
   Serial.println("MPR121 found!");
 
-  usbMIDI.sendProgramChange(75,1);
-  
+  usbMIDI.sendProgramChange(75, 1);
+
+}
+
+void readInputs()
+{
+  // Get the currently touched pads
+  currtouched = cap.touched();
+
+  joystick_joystick_x_position = analogRead(PIN_ANALOG_X);
+  joystick_joystick_y_position = analogRead(PIN_ANALOG_Y);
+  joystick_buttonState = digitalRead(buttonPin);
+}
+
+void findJoystickDirection()
+{
+  if (joystick_x_position > 630 && 400 < joystick_y_position < 800 ) {
+    currButtonPosition = 4;
+  } else if (joystick_x_position < 45 && 200 < joystick_y_position < 600) {
+    currButtonPosition = 3;
+  } else if (joystick_y_position > 630 && 200 < joystick_x_position < 600) {
+    currButtonPosition = 1;
+  } else if (joystick_y_position < 45 && 300 < joystick_x_position < 800) {
+    currButtonPosition = 2;
+  } else {
+    currButtonPosition = 0;
+  }
+}
+
+int didJoystickChange()
+{
+  if (currButtonPosition != lastButtonPosition) {
+    lastButtonPosition = currButtonPosition;
+
+    if (lastButtonPosition != 0) {
+      return lastButtonPosition;
+    }
+  }
+  return -1;
+}
+
+void changeOctave(int joystickPosition)
+{
+  if (lastButtonPosition == 2)
+  {
+    currOctave++;
+  } else if (lastButtonPosition == 1)
+  {
+    currOctave--;
+  }
 }
 
 void loop()
 {
-  // Get the currently touched pads
-  currtouched = cap.touched();
+
+  readInputs();
+
+  tempJoystickPosition = didJoystickChange();
+
+  if (tempJoystickPosition != -1)
+  {
+    changeOctave(tempJoystickPosition);
+  }
+  
   //Set NbTops to 0 ready for flowulations
   NbTopsFan = 0;
   //Enables interrupts
   sei();
-  
+
   if (flow > 0)
   {
     if (shouldPrint(flow, lastFlow)) {
@@ -103,15 +171,15 @@ void loop()
 // Functions
 
 void extraDebugInfoForCapSensor() {
-   // debugging info, what
+  // debugging info, what
   Serial.print("\t\t\t\t\t\t\t\t\t\t\t\t\t 0x"); Serial.println(cap.touched(), HEX);
   Serial.print("Filt: ");
-  for (uint8_t i=0; i<12; i++) {
+  for (uint8_t i = 0; i < 12; i++) {
     Serial.print(cap.filteredData(i)); Serial.print("\t");
   }
   Serial.println();
   Serial.print("Base: ");
-  for (uint8_t i=0; i<12; i++) {
+  for (uint8_t i = 0; i < 12; i++) {
     Serial.print(cap.baselineData(i)); Serial.print("\t");
   }
   Serial.println();
@@ -138,24 +206,24 @@ void playNote (uint16_t reading)
   {
     if (temp == noteButtons[i] && noteButtonToggle[i] == false)
     {
-      usbMIDI.sendNoteOn(noteMIDI[i], 99, channel);
+      usbMIDI.sendNoteOn(noteMIDI[i] + (12 * currOctave), 99, channel);
       noteButtonToggle[i] = true;
     }
     else if (temp != noteButtons[i])
     {
-      usbMIDI.sendNoteOff(noteMIDI[i], 99, channel);
+      usbMIDI.sendNoteOff(noteMIDI[i] + (12 * currOctave), 99, channel);
       noteButtonToggle[i] = false;
     }
   }
-  
+
 }
 
 void turnOffAllNotes()
 {
   for (uint8_t i = 0; i < numberOfNotes; i++)
   {
-    usbMIDI.sendNoteOff(noteMIDI[i], 0, channel);
-    noteButtonToggle[i] = false; 
+    usbMIDI.sendNoteOff(noteMIDI[i] + (12 * currOctave), 0, channel);
+    noteButtonToggle[i] = false;
   }
 }
 
