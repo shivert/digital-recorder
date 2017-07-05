@@ -35,7 +35,6 @@ const int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //corresponding
 const int octaves[] = { -2, -1, 0, 1, 2};
 
 bool notesEnabled[127] = {false};
-bool notesToBeEnabled[127] = {false};
 
 int joystick_x_position, joystick_y_position, joystick_buttonState;
 int lastButtonPosition = 0;
@@ -71,9 +70,58 @@ void setup()
     notesEnabled[i] = false;
     notesToBeEnabled[i] = false;
   }
-
 }
 
+void loop()
+{
+  readInputs();
+  killOnButtonPush();
+  findJoystickDirection();
+
+  //Set NbTops to 0 ready for flowulations
+  NbTopsFan = 0;
+  //Enables interrupts
+  sei();
+
+  int tempJoystickPosition = didJoystickChange();
+
+  //  Serial.print("tempJoystickPosition");
+  //  Serial.println(tempJoystickPosition);
+
+  if (tempJoystickPosition != -1)
+  {
+    changeOctave(tempJoystickPosition);
+  }
+  
+  if (flow > 0)
+  {
+    if (shouldPrint(flow, lastFlow)) {
+      //Serial.println("Blowing");
+    }
+    playNote(currtouched);
+  }
+  else
+  {
+    if (shouldPrint(flow, lastFlow)) {
+      Serial.println("Not Blowing");
+      turnOffAllNotes();
+    }
+  }
+
+  //reset our state
+  lasttouched = currtouched;
+  lastFlow = flow;
+
+  // put a delay so it isn't overwhelming ??? I don't know if this is needed?
+  delay(100);
+
+  //Disable interrupts
+  cli();
+  calculateFlow();
+}
+
+
+// Functions
 void readInputs()
 {
   // Get the currently touched pads
@@ -142,59 +190,6 @@ void killOnButtonPush() {
   }
 }
 
-void loop()
-{
-
-  readInputs();
-  killOnButtonPush();
-  findJoystickDirection();
-
-  //Set NbTops to 0 ready for flowulations
-  NbTopsFan = 0;
-  //Enables interrupts
-  sei();
-
-  int tempJoystickPosition = didJoystickChange();
-
-  //  Serial.print("tempJoystickPosition");
-  //  Serial.println(tempJoystickPosition);
-
-  if (tempJoystickPosition != -1)
-  {
-    changeOctave(tempJoystickPosition);
-  }
-  
-  if (flow > 0)
-  {
-    if (shouldPrint(flow, lastFlow)) {
-      //Serial.println("Blowing");
-    }
-    playNote(currtouched);
-  }
-  else
-  {
-    if (shouldPrint(flow, lastFlow)) {
-      Serial.println("Not Blowing");
-      turnOffAllNotes();
-    }
-  }
-
-  //reset our state
-  lasttouched = currtouched;
-  lastFlow = flow;
-
-  // put a delay so it isn't overwhelming ??? I don't know if this is needed?
-  delay(100);
-
-  //Disable interrupts
-  cli();
-
-  calculateFlow();
-}
-
-
-// Functions
-
 void extraDebugInfoForCapSensor() {
   // debugging info, what
   Serial.print("\t\t\t\t\t\t\t\t\t\t\t\t\t 0x"); Serial.println(cap.touched(), HEX);
@@ -255,6 +250,7 @@ void playNote (uint16_t reading)
 
 }
 
+// Turns out all notes that are currently on
 void turnOffAllNotes()
 {
   //  Serial.println("ALL NOTES OFF");
@@ -268,6 +264,15 @@ void turnOffAllNotes()
   }
 }
 
+// Only prints if valued has changed
+bool shouldPrint(int num, int lastNum)
+{
+  if (num != lastNum)
+  {
+    return true;
+  }
+  return false;
+}
 
 void mockFlowSensor()
 {
@@ -283,15 +288,5 @@ void mockFlowSensor()
       flow = 0;
     }
   }
-}
-
-
-bool shouldPrint(int num, int lastNum)
-{
-  if (num != lastNum)
-  {
-    return true;
-  }
-  return false;
 }
 
