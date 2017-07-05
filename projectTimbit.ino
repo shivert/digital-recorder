@@ -1,22 +1,19 @@
 #include <Adafruit_MPR121.h>
 #include <Wire.h>
 
-// the MIDI channel number to send messages
-const int channel = 1;
+const int channel = 1;             //MIDI channel number to send messages
+const int flowSensor = 2;          //Pin location of the sensor
+const int buttonPin = 6;           //Pin location of joystick button
+const int PIN_ANALOG_X = 23;       //Pin location for the horizontal motion of the joystick
+const int PIN_ANALOG_Y = 22;       //Pin location for the vertical motion of the joystick
 
-volatile int NbTopsFan; //measuring the rising edges of the signal
+volatile int NbTopsFan;            //measuring the rising edges of the signal
 int flow = 0;
-int lastFlow = 0;
-const int flowSensor = 2;    //The pin location of the sensor
-const int buttonPin = 6;     //The pin location of joystick button
-const int PIN_ANALOG_X = 23;
-const int PIN_ANALOG_Y = 22;
+int lastFlow = 0;         //variables used to store flow information
 
-// You can have up to 4 on one i2c bus but one is enough for testing!
 Adafruit_MPR121 cap = Adafruit_MPR121();
 
-// Keeps track of the last pins touched
-// so we know when buttons are 'released'
+// Keeps track of the last pins touched so we know when buttons are 'released'
 uint16_t lasttouched = 0;
 uint16_t currtouched = 0;
 
@@ -33,8 +30,8 @@ const int NOTE_C = 8;
 const int NOTE_D_2 = 9;
 const int NOTE_B_FLAT = 10;
 
-const byte noteButtons[] = {255, 127, 63, 31, 15, 7, 3, 5, 4, 27};
-const int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //the last value is the default recorder note
+const byte noteButtons[] = {255, 127, 63, 31, 15, 7, 3, 5, 4, 27}; //byte values corresponding to button confiugration
+const int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //corresponding to MIDI notes
 const int octaves[] = { -2, -1, 0, 1, 2};
 
 bool notesEnabled[127] = {false};
