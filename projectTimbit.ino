@@ -9,7 +9,7 @@ const int PIN_ANALOG_Y = 22;       //Pin location for the vertical motion of the
 
 volatile int NbTopsFan;            //measuring the rising edges of the signal
 int flow = 0;
-int lastFlow = 0;         //variables used to store flow information
+int lastFlow = 0;                  //variables used to store flow information
 
 Adafruit_MPR121 cap = Adafruit_MPR121();
 
@@ -35,14 +35,13 @@ const int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //corresponding
 const int octaves[] = { -2, -1, 0, 1, 2};
 
 bool notesEnabled[127] = {false};
+bool notesToBeEnabled[127] = {false};
 
 int joystick_x_position, joystick_y_position, joystick_buttonState;
 int lastButtonPosition = 0;
 int currButtonPosition = 0;
 int currOctave = 2;
 const char* const directionMapping[] = {"normal", "down", "up", "left", "right"};
-
-bool muted = false;
 
 void incrementCount ()     //This is the function that the interupt calls
 {
@@ -70,6 +69,7 @@ void setup()
   //usbMIDI.sendProgramChange(75, 1);
   for (int i = 0; i < 128; i++) {
     notesEnabled[i] = false;
+    notesToBeEnabled[i] = false;
   }
 
 }
@@ -108,12 +108,6 @@ void findJoystickDirection()
 
 int didJoystickChange()
 {
-  //  Serial.print("currButtonPosition");
-  //  Serial.println(currButtonPosition);
-  //
-  //  Serial.print("lastButtonPosition");
-  //  Serial.println(lastButtonPosition);
-
   if (currButtonPosition != lastButtonPosition) {
     lastButtonPosition = currButtonPosition;
 
@@ -126,31 +120,25 @@ int didJoystickChange()
 
 void changeOctave(int joystickPosition)
 {
-  if (lastButtonPosition == 2 && currOctave + 1 < (sizeof(octaves) / sizeof(octaves[0])))
+  Serial.println("Joystick Change Detected");
+  if (lastButtonPosition == 2 && currOctave < 4)
   {
-    updateNotesWithOctave(currOctave + 1);
+    Serial.print("Octave Up: ");
+    Serial.println(currOctave + 1);
     currOctave++;
+    turnOffAllNotes();
   } else if (lastButtonPosition == 1 && currOctave > 0)
   {
-    updateNotesWithOctave(currOctave - 1);
+    Serial.print("Octave Down: ");
+    Serial.println(currOctave - 1);
     currOctave--;
-  }
-}
-
-void updateNotesWithOctave(int newOctave) {
-  for (uint8_t i = 0; i < numberOfNotes; i++)
-  {
-    if (notesEnabled[i]) {
-      usbMIDI.sendNoteOff(noteMIDI[i] + (12 * octaves[currOctave]), 0, channel);
-      usbMIDI.sendNoteOn(noteMIDI[i] + (12 * octaves[newOctave]), 0, channel);
-    }
+    turnOffAllNotes();
   }
 }
 
 void killOnButtonPush() {
   if (!joystick_buttonState) {
     turnOffAllNotes();
-    //muted = !muted;
   }
 }
 
@@ -161,6 +149,11 @@ void loop()
   killOnButtonPush();
   findJoystickDirection();
 
+  //Set NbTops to 0 ready for flowulations
+  NbTopsFan = 0;
+  //Enables interrupts
+  sei();
+
   int tempJoystickPosition = didJoystickChange();
 
   //  Serial.print("tempJoystickPosition");
@@ -170,31 +163,20 @@ void loop()
   {
     changeOctave(tempJoystickPosition);
   }
-  //
-  //  Serial.print("current octave");
-  //  Serial.println(currOctave);
-
-  //Set NbTops to 0 ready for flowulations
-  NbTopsFan = 0;
-  //Enables interrupts
-  sei();
-
+  
   if (flow > 0)
   {
     if (shouldPrint(flow, lastFlow)) {
-      Serial.println("Blowing");
+      //Serial.println("Blowing");
     }
-    //if (!muted) {
-      playNote(currtouched);
-    //}
+    playNote(currtouched);
   }
   else
   {
     if (shouldPrint(flow, lastFlow)) {
       Serial.println("Not Blowing");
+      turnOffAllNotes();
     }
-    //muted = false;
-    turnOffAllNotes();
   }
 
   //reset our state
@@ -203,12 +185,11 @@ void loop()
 
   // put a delay so it isn't overwhelming ??? I don't know if this is needed?
   delay(100);
+
   //Disable interrupts
   cli();
 
   calculateFlow();
-  //mockFlowSensor();
-  //extraDebugInfoForCapSensor();
 }
 
 
@@ -250,11 +231,11 @@ void playNote (uint16_t reading)
   for (uint8_t i = 0; i < 10; i++)
   {
     int tempNoteNumber = noteMIDI[i] + (12 * octaves[currOctave]);
-//        Serial.print("note number: ");
-//        Serial.println(tempNoteNumber);
-//        Serial.println("conditions");
-//        Serial.println(temp == noteButtons[i]);
-//        Serial.println(notesEnabled[tempNoteNumber] == false);
+    //        Serial.print("note number: ");
+    //        Serial.println(tempNoteNumber);
+    //        Serial.println("conditions");
+    //        Serial.println(temp == noteButtons[i]);
+    //        Serial.println(notesEnabled[tempNoteNumber] == false);
 
     if (temp == noteButtons[i] && notesEnabled[tempNoteNumber] == false)
     {
@@ -279,8 +260,11 @@ void turnOffAllNotes()
   //  Serial.println("ALL NOTES OFF");
   for (uint8_t i = 0; i < numberOfNotes; i++)
   {
-    usbMIDI.sendNoteOff(i, 0, channel);
-    notesEnabled[i] = false;
+    if (notesEnabled[i])
+    {
+      usbMIDI.sendNoteOff(i, 0, channel);
+      notesEnabled[i] = false;
+    }
   }
 }
 
