@@ -91,12 +91,14 @@ void loop()
     changeOctave(tempJoystickPosition);
   }
 
-  if (flow > 0)
+  if (flow > 0 && !killAll)
   {
     if (shouldPrint(flow, lastFlow)) {
       Serial.println("Blowing");
     }
     playNote(currTouched);
+  } else if (killAll){
+    turnOffAllNotes();
   }
   else
   {
@@ -209,7 +211,18 @@ void calculateFlow()
 
 int changeInFlow()
 {
-  return abs(lastFlow - flow);
+  return lastFlow - flow;
+}
+
+void handleROC()
+{
+  int MIN_NEGATIVE_ROC = -5
+  
+  if (changeInFlow() < MIN_NEGATIVE_ROC) {
+    killAll = true;
+  } else {
+    killAll = false;
+  }
 }
 
 void playNote (uint16_t reading)
