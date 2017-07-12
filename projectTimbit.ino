@@ -6,6 +6,7 @@ const int FLOW_SENSOR = 2;         //Pin location of the sensor
 const int JOYSTICK_BUTTON = 6;     //Pin location of joystick button
 const int PIN_ANALOG_X = 23;       //Pin location for the horizontal motion of the joystick
 const int PIN_ANALOG_Y = 22;       //Pin location for the vertical motion of the joystick
+const int PIN_LED_INDICATOR = 22;       //Pin location for the LED indicator
 
 volatile int NbTopsFan;            //measuring the rising edges of the signal
 int flow = 0, lastFlow = 0;        //variables used to store flow information
@@ -50,6 +51,8 @@ void setup()
 
   pinMode(FLOW_SENSOR, INPUT_PULLUP);
   pinMode(JOYSTICK_BUTTON, INPUT_PULLUP);
+  pinMode(PIN_LED_INDICATOR, OUTPUT);
+  
   attachInterrupt(FLOW_SENSOR, incrementCount, RISING);
 
   Serial.println("Group 5 Electrocorder");
@@ -245,16 +248,18 @@ void playNote (uint16_t reading)
     if (temp == noteButtons[i] && notesEnabled[tempNoteNumber] == false)
     {
       usbMIDI.sendNoteOn(tempNoteNumber, 99, MIDI_CHANNEL);
-      Serial.print(tempNoteNumber);
-      Serial.println(" on");
+//      Serial.print(tempNoteNumber);
+//      Serial.println(" on");
       notesEnabled[tempNoteNumber] = true;
+      digitalWrite(PIN_LED_INDICATOR, LOW); 
     }
     else if (temp != noteButtons[i] && notesEnabled[tempNoteNumber] == true)
     {
-      Serial.print(tempNoteNumber);
-      Serial.println(" off");
+//      Serial.print(tempNoteNumber);
+//      Serial.println(" off");
       usbMIDI.sendNoteOff(tempNoteNumber, 99, MIDI_CHANNEL);
       notesEnabled[tempNoteNumber] = false;
+      digitalWrite(PIN_LED_INDICATOR, HIGH); 
     }
   }
 
