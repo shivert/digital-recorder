@@ -4,9 +4,9 @@
 const int MIDI_CHANNEL = 1;        //MIDI channel number to send messages
 const int FLOW_SENSOR = 2;         //Pin location of the sensor
 const int JOYSTICK_BUTTON = 6;     //Pin location of joystick button
-const int PIN_ANALOG_X = 22;       //Pin location for the horizontal motion of the joystick
-const int PIN_ANALOG_Y = 23;       //Pin location for the vertical motion of the joystick
-const int PIN_LED_INDICATOR = 22;       //Pin location for the LED indicator
+const int PIN_LED_INDICATOR = 13;  //Pin location for the LED indicator
+const int PIN_ANALOG_X = 19;       //Pin location for the horizontal motion of the joystick
+const int PIN_ANALOG_Y = 20;       //Pin location for the vertical motion of the joystick
 
 volatile int NbTopsFan;            //measuring the rising edges of the signal
 int flow = 0, lastFlow = 0;        //variables used to store flow information
@@ -59,7 +59,6 @@ void setup()
   pinMode(PIN_LED_INDICATOR, OUTPUT);
   
   attachInterrupt(FLOW_SENSOR, incrementCount, RISING);
-
   Serial.println("Group 5 Electrocorder");
 
   // Default address is 0x5A, if tied to 3.3V its 0x5B
@@ -105,7 +104,7 @@ void loop()
   if (flow > 0 && !killAll)
   {
     if (shouldPrint(flow, lastFlow)) {
-      //Serial.println("Blowing");
+      Serial.println("Blowing");
     }
     playNote(currTouched);
   }
@@ -152,17 +151,17 @@ void readInputs()
 
 void findJoystickDirection()
 {
-//  Serial.print("joystick_x_position");
-//  Serial.println(joystick_x_position);
-//  Serial.print("joystick_y_position");
-//  Serial.println(joystick_y_position);
+  Serial.print("joystick_x_position");
+  Serial.println(joystick_x_position);
+  Serial.print("joystick_y_position");
+  Serial.println(joystick_y_position);
   if (joystick_x_position > 630 && 400 < joystick_y_position < 800 ) {
     currJoystickPosition = 4;
-  } else if (joystick_x_position < 45 && 200 < joystick_y_position < 600) {
+  } else if (joystick_x_position < 250 && 200 < joystick_y_position < 800) {
     currJoystickPosition = 3;
   } else if (joystick_y_position > 630 && 200 < joystick_x_position < 600) {
     currJoystickPosition = 1;
-  } else if (joystick_y_position < 45 && 300 < joystick_x_position < 800) {
+  } else if (joystick_y_position < 250 && 300 < joystick_x_position < 800) {
     currJoystickPosition = 2;
   } else {
     currJoystickPosition = 0;
@@ -286,15 +285,15 @@ void playNote (uint16_t reading)
     if (temp == noteButtons[i] && notesEnabled[tempNoteNumber] == false)
     {
       usbMIDI.sendNoteOn(tempNoteNumber, 99, MIDI_CHANNEL);
-//      Serial.print(tempNoteNumber);
-//      Serial.println(" on");
+      Serial.print(tempNoteNumber);
+      Serial.println(" on");
       notesEnabled[tempNoteNumber] = true;
       digitalWrite(PIN_LED_INDICATOR, LOW); 
     }
     else if (temp != noteButtons[i] && notesEnabled[tempNoteNumber] == true)
     {
-//      Serial.print(tempNoteNumber);
-//      Serial.println(" off");
+      Serial.print(tempNoteNumber);
+      Serial.println(" off");
       usbMIDI.sendNoteOff(tempNoteNumber, 99, MIDI_CHANNEL);
       notesEnabled[tempNoteNumber] = false;
       digitalWrite(PIN_LED_INDICATOR, HIGH); 
