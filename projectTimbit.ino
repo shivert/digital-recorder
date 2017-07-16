@@ -1,37 +1,36 @@
 #include <Adafruit_MPR121.h>
 #include <Wire.h>
 
-const int MIDI_CHANNEL = 1;        //MIDI channel number to send messages
-const int FLOW_SENSOR = 2;         //Pin location of the sensor
-const int JOYSTICK_BUTTON = 6;     //Pin location of joystick button
-const int PIN_LED_INDICATOR = 13;  //Pin location for the LED indicator
-const int PIN_ANALOG_X = 20;       //Pin location for the horizontal motion of the joystick
-const int PIN_ANALOG_Y = 21;       //Pin location for the vertical motion of the joystick
+const int MIDI_CHANNEL = 1;                //MIDI channel number to send messages
+const int FLOW_SENSOR = 2;                 //Pin location of the flow sensor
+const int JOYSTICK_BUTTON = 6;             //Pin location of joystick button
+const int PIN_LED_INDICATOR = 13;          //Pin location for the LED indicator
+const int PIN_ANALOG_X = 20;               //Pin location for the horizontal motion of the joystick
+const int PIN_ANALOG_Y = 21;               //Pin location for the vertical motion of the joystick
 
-volatile int NbTopsFan;            //measuring the rising edges of the signal
-int flow = 0, lastFlow = 0;        //variables used to store flow information
+volatile int NbTopsFan;                    //measuring the rising edges of the signal of the flow sensor
+int flow = 0, lastFlow = 0;                //variables used to store flow information
 
-Adafruit_MPR121 cap = Adafruit_MPR121();
+Adafruit_MPR121 cap = Adafruit_MPR121();   //initialize the board for the cap touch
+uint16_t lastTouched = 0;                  //last touched fingering combination
+uint16_t currTouched = 0;                  //current fingering combination
 
-// Keeps track of the last pins touched so we know when buttons are 'released'
-uint16_t lastTouched = 0;         //last touched fingering combination
-uint16_t currTouched = 0;         //current fingering combination
+// NOTE_MIDDLE_C   --->    1
+// NOTE_D          --->    2
+// NOTE_E          --->    3
+// NOTE_F          --->    4
+// NOTE_G          --->    5
+// NOTE_A          --->    6
+// NOTE_B          --->    7
+// NOTE_C          --->    8
+// NOTE_D_2        --->    9
+// NOTE_B_FLAT     --->    10
 
-// NOTE_MIDDLE_C ---> 1
-// NOTE_D ---> 2
-// NOTE_E ---> 3
-// NOTE_F ---> 4
-// NOTE_G ---> 5
-// NOTE_A ---> 6
-// NOTE_B ---> 7
-// NOTE_C ---> 8
-// NOTE_D_2 ---> 9
-// NOTE_B_FLAT ---> 10
-
-const int numberOfNotes = 128; // Total Number of MIDI notes
+const int numberOfNotes = 128; //total Number of MIDI notes
 const byte noteButtons[] = {255, 127, 63, 31, 15, 7, 3, 5, 4, 27}; //intenger values corresponding to button confiugration
 const int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //corresponding MIDI notes
-bool notesEnabled[127] = {false}; //array to keep track of which notes are on
+bool notesEnabled[127] = {false}; //array to keep track of which notes are currently on
+
 bool killAll = false;
 bool vibratoEnabled = false;
 bool validNote = false;
@@ -54,13 +53,12 @@ float noteStartTime = 0;
 void setup()
 {
   Serial.begin(9600);
+  Serial.println("Group 5 Electrocorder");
 
   pinMode(FLOW_SENSOR, INPUT_PULLUP);
   pinMode(JOYSTICK_BUTTON, INPUT_PULLUP);
   pinMode(PIN_LED_INDICATOR, OUTPUT);
-
   attachInterrupt(FLOW_SENSOR, incrementCount, RISING);
-  Serial.println("Group 5 Electrocorder");
 
   // Default address is 0x5A, if tied to 3.3V its 0x5B
   // If tied to SDA its 0x5C and if SCL then 0x5D
@@ -70,17 +68,12 @@ void setup()
     while (1);
   }
   Serial.println("MPR121 found!");
-
-  // Set up default value for notesEnabled array
-  for (int i = 0; i < 128; i++) {
-    notesEnabled[i] = false;
-  }
 }
 
 void loop()
 {
   readInputs();
-  killOnButtonPush();
+  checkForDoubleTonguing();
   findJoystickDirection();
   checkForValidCombo(currTouched);
 
@@ -91,10 +84,6 @@ void loop()
   sei();
 
   int tempJoystickPosition = didJoystickChange();
-
-  //  Serial.print("tempJoystickPosition");
-  //  Serial.println(tempJoystickPosition);
-
   if (tempJoystickPosition == 1 || tempJoystickPosition == 2 )
   {
     changeOctave(tempJoystickPosition);
@@ -124,7 +113,6 @@ void loop()
   lastTouched = currTouched;
   lastFlow = flow;
 
-  // put a delay so it isn't overwhelming ??? I don't know if this is needed?
   delay(100);
 
   //Disable interrupts
@@ -132,7 +120,7 @@ void loop()
   calculateFlow();
 }
 
-// Functions
+// Read all of the inputs
 void readInputs()
 {
   // Get the currently touched pads
@@ -140,23 +128,18 @@ void readInputs()
 
   joystick_x_position = analogRead(PIN_ANALOG_X);
   joystick_y_position = analogRead(PIN_ANALOG_Y);
-
-  //  Serial.print("joystick_x_position");
-  //  Serial.println(joystick_x_position);
-  //
-  //  Serial.print("joystick_y_position");
-  //  Serial.println(joystick_y_position);
-
   joystick_buttonState = digitalRead(JOYSTICK_BUTTON);
 }
 
+// Toggle the LED based on fingering combination
 void checkForValidCombo(uint16_t reading)
 {
+  // Retrieve the bottom 8 bits from the reading
   uint8_t temp = (reading & 0xff);
   for (int i = 0; i < 10; i++)
   {
     if (temp == noteButtons[i])
-    { 
+    {
       digitalWrite(PIN_LED_INDICATOR, HIGH);
       validNote = true;
     }
@@ -165,18 +148,15 @@ void checkForValidCombo(uint16_t reading)
   if (validNote == false)
   {
     digitalWrite(PIN_LED_INDICATOR, LOW);
-  } else 
+  } else
   {
     validNote = false;
   }
 }
 
+// Determine joystick position based off of x-position and y-position values
 void findJoystickDirection()
 {
-//  Serial.print("joystick_x_position");
-//  Serial.println(joystick_x_position);
-//  Serial.print("joystick_y_position");
-//  Serial.println(joystick_y_position);
   if (joystick_x_position > 630 && 400 < joystick_y_position < 800 ) {
     currJoystickPosition = 4;
   } else if (joystick_x_position < 250 && 200 < joystick_y_position < 800) {
@@ -190,6 +170,8 @@ void findJoystickDirection()
   }
 }
 
+// If joystick position has changed, return the new joystick position value
+// Otherwise, return -1
 int didJoystickChange()
 {
   if (currJoystickPosition != lastJoystickPosition) {
@@ -226,14 +208,13 @@ void changeVibrato(int joystickPosition)
 
 void changeOctave(int joystickPosition)
 {
-  Serial.println("Joystick Change Detected");
-  if (lastJoystickPosition == 2 && currOctave < 2)
+  if (lastJoystickPosition == 2 && currOctave < 3)
   {
     Serial.print("Octave Up: ");
     Serial.println(currOctave + 1);
     currOctave++;
     turnOffAllNotes();
-  } else if (lastJoystickPosition == 1 && currOctave > -2)
+  } else if (lastJoystickPosition == 1 && currOctave > -3)
   {
     Serial.print("Octave Down: ");
     Serial.println(currOctave - 1);
@@ -242,25 +223,10 @@ void changeOctave(int joystickPosition)
   }
 }
 
-void killOnButtonPush() {
+void checkForDoubleTonguing() {
   if (!joystick_buttonState) {
     turnOffAllNotes();
   }
-}
-
-void extraDebugInfoForCapSensor() {
-  // debugging info, what
-  Serial.print("\t\t\t\t\t\t\t\t\t\t\t\t\t 0x"); Serial.println(cap.touched(), HEX);
-  Serial.print("Filt: ");
-  for (uint8_t i = 0; i < 12; i++) {
-    Serial.print(cap.filteredData(i)); Serial.print("\t");
-  }
-  Serial.println();
-  Serial.print("Base: ");
-  for (uint8_t i = 0; i < 12; i++) {
-    Serial.print(cap.baselineData(i)); Serial.print("\t");
-  }
-  Serial.println();
 }
 
 void calculateFlow()
@@ -273,53 +239,25 @@ int changeInFlow()
   return lastFlow - flow;
 }
 
-void handleROC()
-{
-  int MIN_NEGATIVE_ROC = -2;
-  Serial.print("Flow: ");
-  Serial.println(NbTopsFan);
-
-  if (changeInFlow() < MIN_NEGATIVE_ROC)
-  {
-    killAll = true;
-  } else {
-    killAll = false;
-  }
-}
-
 void playNote (uint16_t reading)
 {
-  //Get the botton 8 bits from the reading
+  // Retrieve the bottom 8 bits from the reading
   uint8_t temp = (reading & 0xff);
-  //  Serial.println(reading);
-  //  Serial.print("byte read: ");
-  //  Serial.println(temp);
 
   for (int i = 0; i < 10; i++)
   {
     int tempNoteNumber = noteMIDI[i] + (12 * currOctave);
-    //    Serial.print("note number: ");
-    //    Serial.println(tempNoteNumber);
-    //    Serial.println("conditions");
-    //    Serial.println(temp == noteButtons[i]);
-    //    Serial.println(notesEnabled[tempNoteNumber] == false);
-
     if (temp == noteButtons[i] && notesEnabled[tempNoteNumber] == false)
     {
       usbMIDI.sendNoteOn(tempNoteNumber, 99, MIDI_CHANNEL);
-      Serial.print(tempNoteNumber);
-      Serial.println(" on");
       notesEnabled[tempNoteNumber] = true;
     }
     else if (temp != noteButtons[i] && notesEnabled[tempNoteNumber] == true)
     {
-      Serial.print(tempNoteNumber);
-      Serial.println(" off");
       usbMIDI.sendNoteOff(tempNoteNumber, 99, MIDI_CHANNEL);
       notesEnabled[tempNoteNumber] = false;
     }
   }
-
 }
 
 void turnOffAllNotes()
@@ -334,7 +272,7 @@ void turnOffAllNotes()
   }
 }
 
-// Check if value has changed
+// Check to see if value has changed
 bool shouldPrint(int num, int lastNum)
 {
   if (num != lastNum)
@@ -346,14 +284,10 @@ bool shouldPrint(int num, int lastNum)
 
 void enableVibrato()
 {
+  Serial.println("Vibrato Mode Enabled");
   vibratoValue = (joystick_x_position - 512) * 4 + 2048 * sin(((millis() - noteStartTime) * 0.001 * 2 * PI));
-  //  Serial.print("X-pos");
-  //  Serial.println(joystick_x_position);
-  //  Serial.print("vibratoValue");
-  //  Serial.println(vibratoValue);
   int temp = (int) vibratoValue;
   usbMIDI.sendPitchBend(temp, MIDI_CHANNEL);
-  Serial.println("Vibrato Mode Enabled");
 }
 
 void disableVibrato()
@@ -365,21 +299,3 @@ void incrementCount()     //This is the function that the interupt calls
 {
   NbTopsFan++;  //This function measures the rising and falling edge of the hall effect sensors signal
 }
-
-// used only for testing purposes
-void mockFlowSensor()
-{
-  if (Serial.available() > 0)
-  {
-    String temp = Serial.readString();
-    if (temp == "on")
-    {
-      flow = 50;
-    }
-    else
-    {
-      flow = 0;
-    }
-  }
-}
-
