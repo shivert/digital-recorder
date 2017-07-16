@@ -5,8 +5,8 @@ const int MIDI_CHANNEL = 1;        //MIDI channel number to send messages
 const int FLOW_SENSOR = 2;         //Pin location of the sensor
 const int JOYSTICK_BUTTON = 6;     //Pin location of joystick button
 const int PIN_LED_INDICATOR = 13;  //Pin location for the LED indicator
-const int PIN_ANALOG_X = 19;       //Pin location for the horizontal motion of the joystick
-const int PIN_ANALOG_Y = 20;       //Pin location for the vertical motion of the joystick
+const int PIN_ANALOG_X = 20;       //Pin location for the horizontal motion of the joystick
+const int PIN_ANALOG_Y = 21;       //Pin location for the vertical motion of the joystick
 
 volatile int NbTopsFan;            //measuring the rising edges of the signal
 int flow = 0, lastFlow = 0;        //variables used to store flow information
@@ -34,6 +34,7 @@ const int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //corresponding
 bool notesEnabled[127] = {false}; //array to keep track of which notes are on
 bool killAll = false;
 bool vibratoEnabled = false;
+bool validNote = false;
 
 // Joystick Direction Mapping
 // 0 --> normal
@@ -57,7 +58,7 @@ void setup()
   pinMode(FLOW_SENSOR, INPUT_PULLUP);
   pinMode(JOYSTICK_BUTTON, INPUT_PULLUP);
   pinMode(PIN_LED_INDICATOR, OUTPUT);
-  
+
   attachInterrupt(FLOW_SENSOR, incrementCount, RISING);
   Serial.println("Group 5 Electrocorder");
 
@@ -81,7 +82,7 @@ void loop()
   readInputs();
   killOnButtonPush();
   findJoystickDirection();
-  //  handleROC();
+  checkForValidCombo(currTouched);
 
   //Set NbTops to 0 ready for flowulations
   NbTopsFan = 0;
@@ -91,14 +92,14 @@ void loop()
 
   int tempJoystickPosition = didJoystickChange();
 
-//  Serial.print("tempJoystickPosition");
-//  Serial.println(tempJoystickPosition);
+  //  Serial.print("tempJoystickPosition");
+  //  Serial.println(tempJoystickPosition);
 
   if (tempJoystickPosition == 1 || tempJoystickPosition == 2 )
   {
     changeOctave(tempJoystickPosition);
   }
-  
+
   changeVibrato(tempJoystickPosition);
 
   if (flow > 0 && !killAll)
@@ -149,12 +150,33 @@ void readInputs()
   joystick_buttonState = digitalRead(JOYSTICK_BUTTON);
 }
 
+void checkForValidCombo(uint16_t reading)
+{
+  uint8_t temp = (reading & 0xff);
+  for (int i = 0; i < 10; i++)
+  {
+    if (temp == noteButtons[i])
+    { 
+      digitalWrite(PIN_LED_INDICATOR, HIGH);
+      validNote = true;
+    }
+  }
+
+  if (validNote == false)
+  {
+    digitalWrite(PIN_LED_INDICATOR, LOW);
+  } else 
+  {
+    validNote = false;
+  }
+}
+
 void findJoystickDirection()
 {
-  Serial.print("joystick_x_position");
-  Serial.println(joystick_x_position);
-  Serial.print("joystick_y_position");
-  Serial.println(joystick_y_position);
+//  Serial.print("joystick_x_position");
+//  Serial.println(joystick_x_position);
+//  Serial.print("joystick_y_position");
+//  Serial.println(joystick_y_position);
   if (joystick_x_position > 630 && 400 < joystick_y_position < 800 ) {
     currJoystickPosition = 4;
   } else if (joystick_x_position < 250 && 200 < joystick_y_position < 800) {
@@ -185,20 +207,20 @@ void changeVibrato(int joystickPosition)
   if (lastJoystickPosition == 3 || lastJoystickPosition == 4)
   {
     enableVibrato();
-  
+
     if (vibratoEnabled == false)
     {
       noteStartTime = millis();
-    } 
+    }
 
-     vibratoEnabled = true;
+    vibratoEnabled = true;
   } else
   {
     if (vibratoEnabled == true)
     {
       disableVibrato();
       vibratoEnabled = false;
-    } 
+    }
   }
 }
 
@@ -288,7 +310,6 @@ void playNote (uint16_t reading)
       Serial.print(tempNoteNumber);
       Serial.println(" on");
       notesEnabled[tempNoteNumber] = true;
-      digitalWrite(PIN_LED_INDICATOR, LOW); 
     }
     else if (temp != noteButtons[i] && notesEnabled[tempNoteNumber] == true)
     {
@@ -296,7 +317,6 @@ void playNote (uint16_t reading)
       Serial.println(" off");
       usbMIDI.sendNoteOff(tempNoteNumber, 99, MIDI_CHANNEL);
       notesEnabled[tempNoteNumber] = false;
-      digitalWrite(PIN_LED_INDICATOR, HIGH); 
     }
   }
 
@@ -327,10 +347,10 @@ bool shouldPrint(int num, int lastNum)
 void enableVibrato()
 {
   vibratoValue = (joystick_x_position - 512) * 4 + 2048 * sin(((millis() - noteStartTime) * 0.001 * 2 * PI));
-//  Serial.print("X-pos");
-//  Serial.println(joystick_x_position);  
-//  Serial.print("vibratoValue");
-//  Serial.println(vibratoValue);
+  //  Serial.print("X-pos");
+  //  Serial.println(joystick_x_position);
+  //  Serial.print("vibratoValue");
+  //  Serial.println(vibratoValue);
   int temp = (int) vibratoValue;
   usbMIDI.sendPitchBend(temp, MIDI_CHANNEL);
   Serial.println("Vibrato Mode Enabled");
