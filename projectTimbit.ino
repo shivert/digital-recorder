@@ -15,6 +15,7 @@ Adafruit_MPR121 cap = Adafruit_MPR121();   //initialize the board for the cap to
 uint16_t lastTouched = 0;                  //last touched fingering combination
 uint16_t currTouched = 0;                  //current fingering combination
 
+// Note Mappings
 // NOTE_MIDDLE_C   --->    1
 // NOTE_D          --->    2
 // NOTE_E          --->    3
@@ -27,7 +28,7 @@ uint16_t currTouched = 0;                  //current fingering combination
 // NOTE_B_FLAT     --->    10
 
 const int numberOfNotes = 128; //total Number of MIDI notes
-const byte noteButtons[] = {255, 127, 63, 31, 15, 7, 3, 5, 4, 27}; //intenger values corresponding to button confiugration
+const byte noteButtons[] = {255, 127, 63, 31, 15, 7, 3, 5, 4, 27}; //integer values corresponding to button confiugration
 const int noteMIDI[] = {60, 62, 64, 65, 67, 69, 71, 72, 74, 70}; //corresponding MIDI notes
 bool notesEnabled[127] = {false}; //array to keep track of which notes are currently on
 
@@ -184,6 +185,7 @@ int didJoystickChange()
   return -1;
 }
 
+// If joystick is left or right -> enable vibratto
 void changeVibrato(int joystickPosition)
 {
   if (lastJoystickPosition == 3 || lastJoystickPosition == 4)
@@ -206,6 +208,9 @@ void changeVibrato(int joystickPosition)
   }
 }
 
+// If the joystick position is up, increase octave
+// If the joystick position is down, descrease octave
+// Note: Currently support 7 octaves (-3...3)
 void changeOctave(int joystickPosition)
 {
   if (lastJoystickPosition == 2 && currOctave < 3)
@@ -223,22 +228,28 @@ void changeOctave(int joystickPosition)
   }
 }
 
+// Enable double tonguing mode if joystick button is pressed
 void checkForDoubleTonguing() {
   if (!joystick_buttonState) {
     turnOffAllNotes();
   }
 }
 
+// Calculate flow based off rising edges from flow sensor
 void calculateFlow()
 {
-  flow = (NbTopsFan * 60 / 7.5); //(Pulse frequency x 60) / 7.5Q, = flow rate in L/hour
+  flow = (NbTopsFan * 60 / 7.5);
 }
 
+// Return difference in flow from last state to current state
 int changeInFlow()
 {
   return lastFlow - flow;
 }
 
+// Handles all logic pertaining to playing a note
+// Sends MIDI message to turn note on if the user is in the corrrect position and it it isn't already on
+// Sends MIDI message to turn note off if the user has changed their finger position
 void playNote (uint16_t reading)
 {
   // Retrieve the bottom 8 bits from the reading
@@ -246,6 +257,7 @@ void playNote (uint16_t reading)
 
   for (int i = 0; i < 10; i++)
   {
+    // Calculates the current MIDI note by multipling the supported MIDI notes by the currOctave multiplier
     int tempNoteNumber = noteMIDI[i] + (12 * currOctave);
     if (temp == noteButtons[i] && notesEnabled[tempNoteNumber] == false)
     {
@@ -260,6 +272,7 @@ void playNote (uint16_t reading)
   }
 }
 
+// Iterates through each of the MIDI notes and turns them all off
 void turnOffAllNotes()
 {
   for (uint8_t i = 0; i < numberOfNotes; i++)
@@ -282,6 +295,8 @@ bool shouldPrint(int num, int lastNum)
   return false;
 }
 
+// Turn Vibrato On
+// Vibrato value is based off of joystick position as well as time to give cool sound effect
 void enableVibrato()
 {
   Serial.println("Vibrato Mode Enabled");
@@ -290,12 +305,14 @@ void enableVibrato()
   usbMIDI.sendPitchBend(temp, MIDI_CHANNEL);
 }
 
+// Reset the MIDI PitchBend to 0 to disable vibrato
 void disableVibrato()
 {
   usbMIDI.sendPitchBend(0, MIDI_CHANNEL);
 }
 
-void incrementCount()     //This is the function that the interupt calls
+// Used for keeping track of the flow sensor value
+void incrementCount()
 {
   NbTopsFan++;  //This function measures the rising and falling edge of the hall effect sensors signal
 }
